@@ -1,0 +1,99 @@
+# TryHackMe-ALL-in-One-MJ
+TryHackMe Walkthrough - All in One MJ
+2023/11/30
+By Arpit Rana
+
+This is my walkthrough of the "All in One MJ" room on TryHackMe. While the room description mentions multiple exploitation paths, I'll be documenting the most efficient methods I discovered during my penetration testing journey.
+
+Room: All in One MJ
+Difficulty: Medium
+Target IP: 10.10.64.251
+Objective: Root the machine.
+URL: https://tryhackme.com/room/allinonemj
+
+#Step 1: Reconnaissance
+  -> The first thing to do is always to scan the machine for opened ports.
+
+![nmap](https://github.com/user-attachments/assets/cab54273-5032-4fa9-a903-1cd7c5d7b7bb)
+
+There are 3 ports opened 21 (FTP), 22 (SSH) and 80 (HTTP).
+
+#🚀 Step 2:
+1. FTP Enumeration (Port 21)
+Action: Login anonymously and check for files."Use anonymous as username, (fake email as password) or Press Enter."
+![image](https://github.com/user-attachments/assets/89398a5e-2052-42c1-a9df-c6640d248212)
+
+Since the FTP anonymous login didn’t reveal any files (empty directory)
+
+#step 3: Web Enumeration
+1. Bruteforce directories on the web server.
+2. Command- "gobuster dir -u http://Target-IP -w=/usr/share/wordlists/dirb/common.txt"
+3. By then, I had some results from the GoBuster scans.
+4. ![image](https://github.com/user-attachments/assets/f0237c88-317a-42f7-ad08-81efdb2fceab)
+
+5. Going to http://target/wordpress/ give us a simple wordpress site.
+
+6. ![image](https://github.com/user-attachments/assets/ba69084a-a877-4ffd-814c-0ea8c5885ff6)
+7. I found a username "elyana".
+8. I decided to try brute forcing elyana’s password on wordpress and ssh But they did not find the password.
+9. then,I went back and took a look at the output of WPScan.
+10. i found a intresting plugin (mail-masta).
+  11. there are multiple files in the plugin that include a file directly from the request.
+  12. include($_GET['pl'])
+13. ![image](https://github.com/user-attachments/assets/fad3a61c-5ff8-41c5-ba5f-ef44f8fd8d27)
+
+14. #step 4:Exploitation
+15. I search for mail-masta on ExploitDB and found that is vulnerable To Local File Inclusion(LFI).
+16. POC-https://www.exploit-db.com/exploits/40290  (you can see here).
+17. The following URL will load the /etc/passwd file in the browser: http://target/wordpress/wp-content/plugins/mail-masta/inc/campaign/count_of_send.php?pl=/etc/passwd
+18. then,I tried loading the wp-config.php file,but due to PHP code that not load directly, then i go To Deepseek and search for another payload to load The config file.
+19. after 5-6 attempts i got a Payload which is successfully working
+20. curl "http://Target-IP/wordpress/wp-content/plugins/mail-masta/inc/campaign/count_of_send.php?pl=php://filter/convert.base64-encode/resource=../../../../../wp-config.php"
+21. ![image](https://github.com/user-attachments/assets/b240ff7c-341f-4d7c-81c8-2eb2626d0009)
+
+22. The Output is Base64 encoded.
+23. save the output in a file and decode it.using this command "base64 -d file.txt"
+24. And I got the Database username and Password.
+25. ![image](https://github.com/user-attachments/assets/dd5ecc12-d8fc-42ee-a6b3-540705d3b4f3)
+
+26. Now login to The website.
+27. Go to themes --> Select Themes Editor --> Select 404 Templates --> Add pentest monkey php reverse shell --> change the IP and port --> update the File.
+
+28. Start a nc listener.
+29. search This path http://10.10.64.251/wordpress/wp-content/themes/twentytwenty/404.php
+30. I then got a connection in my netcat listener as www-data.
+31. First of all I stabilized the shell with --> python3 -c 'import pty; pty.spawn("/bin/bash")'
+32. and found an interesting “hint.txt” file in the home directory of “elyana”
+33. ![image](https://github.com/user-attachments/assets/f39a46ae-9d11-488c-baac-6188a9ad40ef)
+
+34. Step 5: Privilege escalation I SUID (www-data -> root)
+35.  I searched for SUID binaries with --> 	"find / -user root -perm -4000 -exec ls -ldb {} \; 2>/dev/null"
+
+36. ![image](https://github.com/user-attachments/assets/3b0ce042-6376-434e-bc8b-eaf9a5bb95c2)
+
+37. There is A intresting Binary /bin/bash
+38. i Search for /bin/bash Privilege escalation On GTFObins.
+39. ![image](https://github.com/user-attachments/assets/3dd09a2a-2c61-42d1-a368-26ef634fd3cb)
+
+40. ![image](https://github.com/user-attachments/assets/2d758841-2549-4c43-b951-4e7ee31fac43)
+41. And you Are Root.
+
+42. Task overview
+1. user.txt
+[VEhNezQ5amc2NjZhbGI1ZTc2c2hydXNuNDlqZzY2NmFsYjVlNzZzaHJ1c259]//Base64 encoded
+2. root.txt
+[VEhNe3VlbTJ3aWdidWVtMndpZ2I2OHNuMmoxb3NwaTg2OHNuMmoxb3NwaTh9]//Base64 encoded
+
+
+
+
+
+
+
+
+
+
+
+
+
+
